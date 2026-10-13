@@ -103,7 +103,12 @@ class RBFKernelGradGrad(RBFKernel):
             )  # verified for n1=n2=1 case
             K[..., :n1, (n2 * (d + 1)) :] = K_13
 
-            K_31 = (-douter1dx2.transpose(-1, -2) + outer2 * outer2) * K_11.repeat(
+            douter2dx1 = KroneckerProductLinearOperator(
+                torch.ones(d, 1, device=x1.device, dtype=x1.dtype).repeat(*batch_shape, 1, 1)
+                / self.lengthscale.transpose(-1, -2).pow(2),
+                torch.ones(n1, n2, device=x1.device, dtype=x1.dtype).repeat(*batch_shape, 1, 1),
+            ).to_dense()
+            K_31 = (-douter2dx1 + outer2 * outer2) * K_11.repeat(
                 [*([1] * n_batch_dims), d, 1]
             )  # verified for n1=n2=1 case
             K[..., (n1 * (d + 1)) :, :n2] = K_31
@@ -116,6 +121,7 @@ class RBFKernelGradGrad(RBFKernel):
                 torch.ones(d, d, device=x1.device, dtype=x1.dtype).repeat(*batch_shape, 1, 1) / self.lengthscale.pow(2),
                 torch.ones(n1, n2, device=x1.device, dtype=x1.dtype).repeat(*batch_shape, 1, 1),
             ).to_dense()
+            kp2_t = douter2dx1.repeat([*([1] * (n_batch_dims + 1)), d])
 
             # II may not be the correct thing to use. It might be more appropriate to use kp instead??
             II = kp.to_dense()
@@ -125,16 +131,12 @@ class RBFKernelGradGrad(RBFKernel):
 
             K[..., n1 : (n1 * (d + 1)), (n2 * (d + 1)) :] = K_23
 
-            K_32 = (
-                (-kp2.transpose(-1, -2) + outer2 * outer2) * outer1 - 2.0 * II * outer2
-            ) * K_11dd  # verified for n1=n2=1 case
+            K_32 = ((-kp2_t + outer2 * outer2) * outer1 - 2.0 * II * outer2) * K_11dd  # verified for n1=n2=1 case
 
             K[..., (n1 * (d + 1)) :, n2 : (n2 * (d + 1))] = K_32
 
-            K_33 = (
-                (-kp2.transpose(-1, -2) + outer2 * outer2) * (-kp2) - 2.0 * II * outer2 * outer1 + 2.0 * (II) ** 2
-            ) * K_11dd + (
-                (-kp2.transpose(-1, -2) + outer2 * outer2) * outer1 - 2.0 * II * outer2
+            K_33 = ((-kp2_t + outer2 * outer2) * (-kp2) - 2.0 * II * outer2 * outer1 + 2.0 * (II) ** 2) * K_11dd + (
+                (-kp2_t + outer2 * outer2) * outer1 - 2.0 * II * outer2
             ) * outer1 * K_11dd  # verified for n1=n2=1 case
 
             K[..., (n1 * (d + 1)) :, (n2 * (d + 1)) :] = K_33

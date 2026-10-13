@@ -9,6 +9,21 @@ from gpytorch.test.base_kernel_test_case import BaseKernelTestCase
 
 
 class TestRBFKernelGradGrad(unittest.TestCase, BaseKernelTestCase):
+    def test_rectangular_covariance(self):
+        for dimensions in (1, 2, 3):
+            with self.subTest(dimensions=dimensions):
+                generator = torch.Generator().manual_seed(17)
+                x = torch.randn(3, dimensions, generator=generator, dtype=torch.double)
+                y = torch.randn(5, dimensions, generator=generator, dtype=torch.double)
+                kernel = RBFKernelGradGrad(ard_num_dims=dimensions).double()
+                kernel.lengthscale = torch.linspace(0.7, 1.4, dimensions, dtype=torch.double)
+                points = torch.cat([x, y])
+                joint = kernel(points).to_dense()
+                split = len(x) * (2 * dimensions + 1)
+                expected = joint[:split, split:]
+                torch.testing.assert_close(kernel(x, y).to_dense(), expected)
+                torch.testing.assert_close(kernel(y, x).to_dense(), expected.transpose(-1, -2))
+
     def create_kernel_no_ard(self, **kwargs):
         return RBFKernelGradGrad(**kwargs)
 
